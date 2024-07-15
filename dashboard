@@ -1,0 +1,112 @@
+import streamlit as st
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+import plotly.express as px
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_absolute_error
+
+# Laden der Daten
+data_path = "dataset_with_coordinates.csv"
+data = pd.read_csv(data_path)
+
+# Datenbereinigung
+data_cleaned = data.dropna(subset=['employee_residence_latitude', 'employee_residence_longitude',
+                                   'company_location_latitude', 'company_location_longitude'])
+
+# Streamlit-Konfiguration
+st.set_page_config(page_title="Explorative und Prädiktive Datenanalyse", layout="wide")
+
+# Dashboard Titel
+st.title("Interaktives Dashboard zur Explorativen und Prädiktiven Datenanalyse")
+
+# Sidebar für die Navigation
+st.sidebar.title("Navigation")
+page = st.sidebar.radio("Seite auswählen", ["EDA", "Predictions"])
+
+if page == "Explorative Analyse":
+    st.header("Explorative Datenanalyse")
+
+    # Auswahl für die Visualisierung
+    vis_option = st.selectbox("Wählen Sie die Visualisierung:", 
+                              ["Gehaltsverteilung nach Job-Titel", "Gehaltsverteilung nach Erfahrungsstufe", 
+                               "Geografische Verteilung"])
+
+    if vis_option == "Gehaltsverteilung nach Job-Titel":
+        # Boxplot nach Job-Titel
+        plt.figure(figsize=(12, 8))
+        sns.boxplot(x='salary_in_usd', y='job_title', data=data_cleaned, showfliers=False)
+        plt.title('Gehaltsverteilung nach Job-Titel')
+        plt.xlabel('Gehalt in USD')
+        plt.ylabel('Job-Titel')
+        plt.grid(True)
+        st.pyplot(plt.gcf())
+
+    elif vis_option == "Gehaltsverteilung nach Erfahrungsstufe":
+        # Boxplot nach Erfahrungsstufe
+        plt.figure(figsize=(10, 6))
+        sns.boxplot(x='salary_in_usd', y='experience_level', data=data_cleaned, showfliers=False)
+        plt.title('Gehaltsverteilung nach Erfahrungsstufe')
+        plt.xlabel('Gehalt in USD')
+        plt.ylabel('Erfahrungsstufe')
+        plt.grid(True)
+        st.pyplot(plt.gcf())
+
+    elif vis_option == "Geografische Verteilung":
+        # Interaktive Karte
+        map_option = st.selectbox("Wählen Sie die Ansicht:", ["Wohnorte der Mitarbeiter", "Standorte der Unternehmen"])
+        
+        if map_option == "Wohnorte der Mitarbeiter":
+            fig = px.scatter_geo(data_cleaned, lat='employee_residence_latitude', lon='employee_residence_longitude',
+                                 hover_name='employee_residence', size='salary_in_usd',
+                                 title='Geografische Verteilung der Wohnorte der Mitarbeiter')
+        else:
+            fig = px.scatter_geo(data_cleaned, lat='company_location_latitude', lon='company_location_longitude',
+                                 hover_name='company_location', size='salary_in_usd',
+                                 title='Geografische Verteilung der Unternehmensstandorte')
+        
+        st.plotly_chart(fig)
+
+elif page == "Prädiktive Modellierung":
+    st.header("Prädiktive Modellierung")
+
+    # Features auswählen
+    st.sidebar.subheader("Features für das Modell auswählen:")
+    selected_features = st.sidebar.multiselect("Wählen Sie die Features:", 
+                                               ["experience_level", "employment_type", "job_title", 
+                                                "remote_ratio", "company_size"])
+
+    # Datenaufbereitung für das Modell
+    if selected_features:
+        X = pd.get_dummies(data_cleaned[selected_features])
+        y = data_cleaned['salary_in_usd']
+        
+        # Train-Test-Split
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        
+        # Modelltraining
+        model = LinearRegression()
+        model.fit(X_train, y_train)
+        
+        # Vorhersagen
+        y_pred = model.predict(X_test)
+        
+        # MAE berechnen
+        mae = mean_absolute_error(y_test, y_pred)
+        st.write(f"Mittlerer absoluter Fehler (MAE) des Modells: {mae:.2f}")
+        
+        # Eingaben für die Vorhersage
+        st.subheader("Gehalt vorhersagen")
+        prediction_input = {}
+        for feature in selected_features:
+            unique_values = data_cleaned[feature].unique()
+            prediction_input[feature] = st.selectbox(f"Wählen Sie {feature}:", unique_values)
+        
+        if st.button("Vorhersagen"):
+            input_data = pd.DataFrame([prediction_input])
+            input_data_encoded = pd.get_dummies(input_data).reindex(columns=X.columns, fill_value=0)
+            salary_prediction = model.predict(input_data_encoded)
+            st.write(f"Vorhergesagtes Gehalt in USD: {salary_prediction[0]:.2f}")
+    else:
+        st.write("Bitte wählen Sie mindestens ein Feature aus, um das Modell zu trainieren.")
