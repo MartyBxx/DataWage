@@ -2,4 +2,4 @@ seaborn==0.12.2
 numpy==1.26.4
 plotly==5.8.0
 pandas==2.1.4
-sklearn==1.2.0
+scikit-klearn==1.2.2
